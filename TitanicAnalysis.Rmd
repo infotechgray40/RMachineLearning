@@ -1,0 +1,123 @@
+---
+title: "TitanicAnalysis"
+author: "Patrick Gray"
+date: "04/02/2015"
+output: html_document
+---
+#Titanic Analysis
+##Example of Obtaining and "Cleaning" Data
+
+The code below reads in the training data for the Titanic data set as currently found on Kaggle.com, and takes a look at the structure of the data through the R str() method.  We can see that there are some int, num, and R factor variables in the R data frame.  
+```{r}
+train.data <- read.csv("train.csv", na.strings=c("NA", ""))
+class(train.data)
+str(train.data)
+```
+
+In the lines below, we convert two int numeric type variables to R factor variables, which is often done in analyzing data.  We then analyze the training data again using str().  ( In statistics, there are four types of variables: nominal, ordinal, interval, and ratio).  "Suvived" and "PClass" are categorical variables.  
+```{r}
+train.data$Survived = factor(train.data$Survived)
+train.data$Pclass = factor(train.data$Pclass)
+str(train.data)
+```
+
+We can analyze the data and see if there are NA's in the training set for the diffferent variables.  sapply can take each variable in a data frame and perform some action with each variable type.  Doing this, we can see that there are "NAs" in the "Age", "Cabin", and "Embarked" variables.  
+```{r}
+sapply(train.data, function(df) {sum(is.na(df)==TRUE)/ length(df) * 100})
+```
+
+Using the R Package "Amelia", we can gain a graphical view of the missing values in the train.data dataframe.  Then, we can impute the missing values in the "Embarked" variable with the most likely value - "S" in this case.  We install additional packages with the install.packages() command.  
+
+```{r}
+library(Amelia)
+missmap(train.data, main="Missing Data in train.data Titanic Dataset")
+table(train.data$Embarked, useNA = "always")
+train.data$Embarked[which(is.na(train.data$Embarked))] = 'S'
+table(train.data$Embarked, useNA = "always")
+```
+
+##Example of Visualizing and Otherwise Exploring Data
+
+After data is "cleaned"" and "munged", it is a good step to gain a graphical view of the data in order to ascertain what machine learning algorithms might be good to analyze our data.  For example, using bar plots we can get a graphical view of the survivors of the Titanic, and the number of people in each passenger class.  
+
+```{r}
+barplot(table(train.data$Survived), main="Titanic Passenger Survival",  names= c("Died", "Survived"), col=c("gray", "yellow"))
+barplot(table(train.data$Pclass), main="Titanic Passenger Class",  names= c("first", "second", "third"), col=c("blue", "green", "red"))
+```
+
+What were the ages of the Titanic passengers and crew?  A histogram can give us that information.  As we can graphically see, most passengers were under 40 years of age.  
+
+```{r}
+hist(train.data$Age, main="Passenger Age", xlab = "Age", col="purple")
+```
+
+Perhaps more interestingly, we can see which passenger class was more likely to perish on the Titanic. 
+
+```{r}
+counts = table( train.data$Survived, train.data$Pclass)
+barplot(counts,  col=c("gray","yellow"), legend =c("Perished", "Survived"), main= "Titanic Class Bar Plot" )
+```
+
+To get a better idea of the relationship of age and survival rate, we can calulate the percentages.
+
+```{r}
+percent <- function(x, digits = 1, format = "f", ...) {
+  paste0(formatC(100 * x, format = format, digits = digits, ...), "%")
+}
+
+train.child = train.data$Survived[train.data$Age < 13]
+under13surv = length(train.child[which(train.child == 1)] ) / length(train.child)
+cat("Survivors below the age of 13: ", percent(under13surv))
+
+train.youth = train.data$Survived[train.data$Age >= 13 & train.data$Age < 25]
+at14_under25surv = length(train.youth[which(train.youth == 1)] ) / length(train.youth)
+cat("Surviviors between 13 and 24 years of age: ", percent(at14_under25surv))
+
+train.adult  = train.data$Survived[train.data$Age >= 25 & train.data$Age < 65]
+at25_under65surv = length(train.adult[which(train.adult == 1)] ) / length(train.adult)
+cat("Survivors between 25 and 64 years of age: ", percent(at25_under65surv))
+
+train.senior  = train.data$Survived[train.data$Age >= 65]
+atover65surv = length(train.senior[which(train.senior == 1)] ) / length(train.senior)
+cat("Survivors 65 and older years of age: ", percent(atover65surv))
+```
+
+Let's use the vcd package to gain a visual representation between the different cateorical variables.  (Use install.packages("vcd") to install the vcd package.)  
+
+```{r}
+library(vcd)
+mosaicplot(train.data$Pclass ~ train.data$Survived, main="Passenger Survival Class", shade=TRUE, xlab="Passenger Class", ylab="Survived")
+```
+
+We can see there were more people who survived in first class than in the second and third classes, and more people who survived in second class than third class.  
+
+
+There are other graphical representations that we could have used as part of getting a preliminary view of the data.  However, it is becoming clearer that there were multiple variables (i.e. age, sex, passenger class) that figured into the survival rate of the passengers on board the Titanic.  We can use a decision tree to make predictions as to survival based on the different variables in the training set.  
+
+##Classification Prediction Using Decision Trees (Supervised Machine Learning)
+
+First, we want to split the train.data set into a training and a test set as seen below.  The set.seed() function makes it possible for the analysis to be repeated by others to obtain the same results.
+
+```{r}
+split.data <- function(data, p = 0.7, s = 12345){
+    set.seed(s)
+    index <- sample(1:dim(data)[1])
+    train <- data[index[1:floor(dim(data)[1] * p)], ]
+    test <- data[index[((ceiling(dim(data)[1] * p)) + 1):dim(data)[1]], ]
+    return(list(train = train, test = test))
+} 
+allset= split.data(train.data, p = 0.7) 
+trainset = allset$train 
+testset = allset$test
+```
+
+We then load the required library for using a decision tree to make predictions, and create the decision tree based on the training data.  We can plot the decision tree as well.  We can see from the decision tree which variables most predicted  survival.  For example, women in first and second class most were more than likely to survive, although, most males over the age of 12 in second and thrid class perished.
+
+```{r}
+require('party')
+train.ctree = ctree(Survived ~ Pclass + Sex + Age + SibSp + Fare + Parch + Embarked, data=trainset)
+train.ctree
+plot(train.ctree, main="Conditional inference tree of Titanic Dataset")
+```
+
+R allows us to use different machine learning algorithms to make classification predictions.  Another machine learning algorithm used for classification is the Support Vector Machine.
