@@ -1,0 +1,60 @@
+---
+title: "MedicalExpensesRegression"
+author: "Patrick Gray"
+date: "04/03/2015"
+output: html_document
+---
+#Multiple Regression Predicting Medical Expenses Based on Multiple Independent Variables
+
+##Clean, Explore, and Visualize the Data
+
+First we read the data set into R.  We want to treat strings as factors, so we set stringsAsFactors = True.  str() prints out the structure of the data frame.  The hist() and pairs.panels() fuctions give a graphical representation of the data. The dependent variable is charges, so we run the summary() function on that dependent variable.   The distribution of insurance values is right skewed.  Before running linear regression, is is good to see how the independent variables, and the dependent variables are correlated.  
+```{r}
+insurance <- read.csv("insurance.csv", stringsAsFactors = TRUE)
+str(insurance)
+
+#Inspect Dependent Variable (Charges)
+summary(insurance$charges)
+hist(insurance$charges, col="yellow")
+
+#Is the data pretty evenly split up between the four regions?
+table(insurance$region)
+
+cor(insurance[c("age", "bmi", "children", "charges")])
+library(psych)
+pairs.panels(insurance[c("age", "bmi", "children", "charges")], col="yellow")
+```
+
+##Train a model on the Data  
+
+In R, the lm() function is used for linear regression.  
+```{r}
+## Step 3: Training a model on the data ----
+ins_model <- lm(charges ~ age + children + bmi + sex + smoker + region, data = insurance)
+# see the estimated beta coefficients
+ins_model
+```
+
+##Evaluate Model Performance  
+
+The R Squared value is a good evaluation indicator of model performance.  The closer the value is to 1, the more our model explains the variability in the dependent variable.  Also, independent variables marked with three astericks are statistically related to the dependent variable.  
+
+
+```{r}
+summary(ins_model)
+```
+
+##Improve on the Model and Again Evaluate Model Performance
+
+Age has a great effect on medical expenses and so does the combination of being overweight together with smoking, so we create two additional independent variables (insurance$age2 and insurance$bmi30).  From the output of the summary() function, the independent variables that have the most significance statistically with the dependent variable are marked with three astericks.  The R Squared value tells us how much our model predicts the variability of the dependent variable.  It tells us how good our model is.  The closer to 1 it is, the better our model is.  By improving the model based on domain knowledge, the R Squared (model-explained variance in dependent variable) value has increased.  We have a better model!  
+
+```{r}
+#Higher Order Age Term Added
+insurance$age2 <- insurance$age^2 # insurance$age2 accounts for nonlinear relationship
+# add an indicator for BMI >= 30
+insurance$bmi30 <- ifelse(insurance$bmi >= 30, 1, 0)
+# create final model with an interaction effect (bmi*smoker)
+ins_model2 <- lm(charges ~ age + age2 + children + bmi + sex + bmi30*smoker + region, data = insurance)
+ins_model2 #Estimated Beta Coefficients
+summary(ins_model2)
+```
